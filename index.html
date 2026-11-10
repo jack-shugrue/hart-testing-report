@@ -291,6 +291,24 @@
   /* The sheet's Close sits 8px under Share and Save as PDF, the same as the gap between them. */
   .sheet:has(.sheet-actions) .sheet__foot { margin-top: 8px; }
 
+  /* In the centered sheet (768px and up) the contents are a list box, as in the NYCO
+     library: no rules, tighter rows with 12px corners, gray under the pointer, the current
+     section filled and checked. Rows reach 12px past the text, so the words still line up
+     with the sheet's title. */
+  @media (min-width: 768px) {
+    .contents { margin-inline: -12px; }
+    .contents li + li { margin-top: 2px; }
+    .contents a, .contents li:first-child a, .contents li:last-child a { border: 0; }
+    .contents a { padding: 10px 12px; border-radius: 12px; transition: background-color .15s ease; }
+    .contents a[aria-current] { background: var(--surface); }
+    .contents a:focus-visible { outline-offset: 0; }
+    .sheet-actions { margin-top: 16px; }
+  }
+  @media (min-width: 768px) and (hover: hover) and (pointer: fine) {
+    .contents a:hover { background: var(--surface); color: var(--text); }
+    .contents a[aria-current]:hover { background: var(--surface-2); }
+  }
+
   /* ── Tables as cards on phones: under 600px each row becomes a gray card, its
      name as the title, then each column's label and value. 24px corners, 16px
      inside, 8px apart. Where every value is short (scores, times), a thin line
