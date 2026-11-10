@@ -223,6 +223,19 @@
   @keyframes sheet-dim { 0% { background-color: transparent; } }
   @keyframes sheet-up-in { 0% { translate: 0 100%; } }
   @keyframes sheet-up-out { to { translate: 0 100%; } }
+  /* From 768px the sheet is a dialog in the middle of the screen (as the NYCO
+     library's Sheet): all four corners rounded, fading and scaling in. Below
+     768px it's the bottom sheet. */
+  @media (min-width: 768px) {
+    .sheet__overlay { align-items: center; padding: 24px; }
+    .sheet { inline-size: min(100%, 40rem); max-block-size: calc(100dvh - 48px); border-radius: 32px; clip-path: inset(0 round 32px); }
+  }
+  @media (min-width: 768px) and (prefers-reduced-motion: no-preference) {
+    .sheet[data-entering] { animation: sheet-pop-in .25s cubic-bezier(.2, 0, 0, 1); }
+    .sheet[data-exiting] { animation: sheet-pop-out .2s ease forwards; }
+  }
+  @keyframes sheet-pop-in { 0% { opacity: 0; scale: .96; } }
+  @keyframes sheet-pop-out { to { opacity: 0; scale: .96; } }
   /* content inside a sheet: sub-sections get a rule and space; tables lose their box and run margin to margin */
   .sheet h3 { margin: 40px 0 16px; padding-top: 40px; border-top: 1px solid var(--line); }
   .sheet .table-scroll { width: auto; max-width: none; border: 0; border-radius: 0; }
