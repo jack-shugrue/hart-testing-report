@@ -1,0 +1,855 @@
+<meta charset="UTF-8">
+<title>Accessibility and Performance Testing</title>
+<meta name="robots" content="noindex, nofollow">
+<meta name="description" content="How the NYC HART Connector landing page was tested for accessibility and performance: results, standards, tools and what's left.">
+<meta property="og:title" content="Accessibility and Performance Testing">
+<meta property="og:description" content="NYC HART Connector landing page: how it was tested for accessibility and performance, and the results.">
+<meta property="og:type" content="article">
+<link rel="icon" href="data:,">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400&display=swap">
+
+<style>
+  /* ── Minimal house style: one typeface, one size, one weight, five colors ──
+     #ffffff bg, #191919 text, #767676 secondary/decorative,
+     #DDDDDD dividers (neutral-300), #f5f5f5 chip/surface (neutral-100),
+     #E8E8E8 chip-on-row-hover (neutral-200). Focus ring #009CFF.
+     Public Sans 16px / 140% / regular everywhere — hierarchy by COLOR and
+     SPACING (4px scale) only. Content left-aligned, never centered. */
+  :root {
+    --white:    #ffffff;
+    --text:     #191919;
+    --muted:    #767676;
+    --line:     #DDDDDD;   /* dividers (neutral-300) */
+    --surface:  #f5f5f5;   /* chip / subtle surface (neutral-100) */
+    --surface-2:#E8E8E8;   /* chip fill on a hovered row (neutral-200) */
+    --muted-on-surface: #6B6B6B;   /* secondary text on --surface: #767676 is only 4.17:1 there, this is 4.89:1 (AA) */
+    --focus:    #009CFF;
+    --up:       #1E7B34;   /* data moves only: positive change */
+    --up-bg:    #E6F4EA;
+    --down:     #C5221F;   /* data moves only: negative change */
+    --down-bg:  #FCE8E6;
+    --measure:  72ch;      /* soft cap — 45–90 chars; balance wins over it */
+    --radius:   12px;
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+  body {
+    margin: 0; background: var(--white); color: var(--text);
+    font-family: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 16px; font-weight: 400; line-height: 1.4;
+    text-align: left; text-wrap: pretty;
+    -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility;
+  }
+  h1, h2, h3, h4, b, strong, th { font-size: inherit; font-weight: 400; }
+  h1, h2, h3, h4, p { margin: 0; }
+  em { font-style: normal; }
+  h1, h2, h3, .kicker, .lead, .sec-intro, .card h4, .card p, .callout li p { text-wrap: balance; }
+  ::selection { background: var(--line); }
+  a { color: var(--text); text-underline-offset: 2px; }
+  a:focus-visible, button:focus-visible, [tabindex]:focus-visible {
+    outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 2px;
+  }
+
+  /* Breakpoints: desktop ≥1200 (side nav; content flexes ~48px clear of it);
+     tablet 768–1199 and mobile <768 share one treatment (side nav hidden). */
+  .wrap { max-width: 1040px; margin: 0; padding: 0 24px; }
+  /* Content right edge stays 48px clear of the OPEN nav (nav = 320px from the screen edge):
+     wrap width ≤ 100vw − 320 − 48 + 24 right padding = 100vw − 344. */
+  @media (min-width: 1200px) { .wrap { max-width: min(1040px, calc(100vw - 344px)); } }
+  @media (max-width: 1199px) { .wrap { padding: 0 20px; } }
+  .lead, .sec-intro, .verdict, .doc-meta, .callout li p { max-width: var(--measure); }
+
+  /* ── Masthead / hero ─────────────────────────────────────────────────── */
+  header.masthead { background: var(--white); }
+  .top-strip { padding: 16px 0 0; }
+  .org { display: flex; flex-direction: column; gap: 4px; }
+  .org-name { color: var(--text); }
+  .org-sub { color: var(--muted); }
+
+  .hero { padding: 104px 0 48px; }        /* 104px between header and content */
+  .eyebrow { color: var(--muted); margin: 0 0 4px; }
+  h1 { color: var(--text); }
+  .doc-meta { display: flex; flex-direction: column; gap: 4px; color: var(--muted); margin: 8px 0 0; }
+  .kicker { color: var(--muted); margin: 32px 0 4px; }   /* "Executive summary" label */
+  .lead { color: var(--text); margin: 0 0 16px; }
+
+  /* Un-boxed emphasis block (e.g. a "Bottom line"): neutral-100 fill, square. */
+  .verdict { margin: 8px 0 24px; padding: 16px; border-radius: 24px; background: var(--surface); color: var(--text); }
+  .verdict-title { color: #565656; margin: 0 0 4px; }    /* one-off title color */
+  .verdict-body { margin: 0; color: var(--text); text-wrap: balance; }   /* balanced; see the no-orphans script */
+
+  /* ── Sections ────────────────────────────────────────────────────────── */
+  main { padding: 0 0 48px; }
+  section { padding: 48px 0; border-top: 1px solid var(--line); }   /* content-width divider */
+  .sec-head { display: flex; align-items: baseline; gap: 12px; margin: 0 0 4px; }
+  .sec-num { color: var(--muted); flex: 0 0 auto; }
+  h2 { color: var(--text); }
+  .sec-intro { color: var(--muted); margin: 0 0 24px; }
+  h3 { color: var(--text); margin: 40px 0 24px; }        /* header → component: larger gap */
+
+  /* ── Chips / tags — neutral-100 fill, no stroke ──────────────────────── */
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; }
+  .chip { color: var(--text); background: var(--surface); border-radius: 6px; padding: 2px 8px; white-space: nowrap; }
+  /* Data-move chips (green/red) — direction of a numeric change only; always with ▲/▼ or a sign. */
+  .chip.up { background: var(--up-bg); color: var(--up); }
+  .chip.dn { background: var(--down-bg); color: var(--down); }
+
+  /* Items on one line: separated by space and color, never by a dot or bullet.
+     <span class="items"><span>Pick 5 of 182</span><span class="muted">Round 1</span></span> */
+  .items { display: inline-flex; flex-wrap: wrap; gap: 0 16px; }
+  .muted { color: var(--muted); }
+
+  /* Buttons: darker on hover, scale down on press, a slight bounce back to size on release.
+     .btn = grey fill; .btn--primary = black fill; .btn--quiet = no fill until hovered. */
+  .btn { font: inherit; color: var(--text); background: var(--surface); border: 0; border-radius: 8px; padding: 12px 16px; cursor: pointer;
+    transition: background-color .15s ease, color .15s ease, transform .3s cubic-bezier(.34, 1.56, .64, 1); }
+  .btn:active { transform: scale(.94); transition-duration: .15s, .15s, .1s; transition-timing-function: ease, ease, cubic-bezier(.2, 0, 0, 1); }
+  .btn--primary { color: var(--white); background: var(--text); }
+  .btn--quiet { color: var(--muted); background: transparent; border-radius: 6px; padding: 8px 12px; }
+  /* A button whose label changes keeps its size: both labels share one cell, data-on picks the visible one.
+     <button class="btn swap" data-on="0"><span>Show plan</span><span>Hide plan</span></button> */
+  .swap { display: inline-grid; justify-items: center; }
+  .swap > span { grid-area: 1 / 1; }
+  .swap[data-on="1"] > :first-child, .swap:not([data-on="1"]) > :last-child { visibility: hidden; }
+  @media (hover: hover) {
+    .btn:hover { background: var(--surface-2); }
+    .btn--primary:hover { background: #000; }
+    .btn--quiet:hover { background: var(--surface); }
+  }
+  .mv.up { color: var(--up); }
+  .mv.dn { color: var(--down); }
+  code { font-family: inherit; background: var(--surface); color: var(--text); padding: 1px 6px; border-radius: 4px; word-break: break-word; }
+
+  /* ── Card grid — no frame, no inset padding ──────────────────────────── */
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px,1fr)); gap: 24px 32px; }
+  .card { background: transparent; padding: 0; }
+  .card h4 { color: var(--muted); margin: 0 0 4px; }     /* item title = neutral-700 */
+  .card p { color: var(--text); }
+  .card .chips { margin-top: 12px; }
+
+  /* Optional wide card rows — extend into the right gutter but reflow to stay
+     ~48px clear of the open side nav. */
+  .grid--wide { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px,1fr)); gap: 32px; }
+  @media (min-width: 1200px) { .grid--wide { width: calc(100vw - 392px); max-width: 1216px; } }
+
+  /* ── Table ───────────────────────────────────────────────────────────── */
+  /* Tables scroll sideways inside their frame but don't bounce past their ends
+     (overscroll-behavior-x): a bounce slides the table off the frame's edge and
+     breaks the header's grey and the row lines. Page scrolling is unaffected. */
+  .table-scroll { overflow-x: auto; overscroll-behavior-x: none; border: 1px solid var(--line); border-radius: var(--radius); background: var(--white); }
+  table { border-collapse: collapse; width: 100%; min-width: 640px; }
+  thead th { text-align: left; color: var(--muted-on-surface); background: var(--surface); padding: 12px 16px; border-bottom: 1px solid var(--line); }
+  tbody td, tbody th[scope="row"] { text-align: left; padding: 12px 16px; border-top: 1px solid var(--line); vertical-align: top; color: var(--text); }
+  tbody tr:first-child td, tbody tr:first-child th { border-top: 0; }
+  /* Row hover only with a real pointer: a tap or press on a phone never greys a row. */
+  @media (hover: hover) and (pointer: fine) {
+    tbody tr:hover td, tbody tr:hover th { background: var(--surface); }
+    tbody tr:hover code, tbody tr:hover .chip:not(.up):not(.dn) { background: var(--surface-2); }
+  }
+  /* Optional wide table (class="table-scroll table-scroll--wide"): grows to its natural width
+     past the 1040 column, right edge always 40px clear of the OPEN side nav.
+     Open nav = 280 rows + 2×16 padding + 8 from edge = 320; + 40 gap + 24 left margin = 384. */
+  @media (min-width: 1200px) { .table-scroll--wide { width: max-content; max-width: calc(100vw - 384px); } }
+  /* Optional sticky header — ONLY for very long tables (roughly 40+ rows, several screens tall).
+     Opt in with data-sticky-head on the .table-scroll wrapper. A fixed copy of the <thead> appears
+     once the real one scrolls off-screen, with a 24px white band above it; column widths and
+     sideways scroll stay synced, and clicks pass through to the real header (sorting keeps working). */
+  .sticky-head { position: fixed; top: 0; z-index: 40; padding-top: calc(24px + env(safe-area-inset-top, 0px)); background: var(--white); }
+  .sticky-head__inner { overflow: hidden; border: 1px solid var(--line); border-bottom: 0; border-radius: var(--radius) var(--radius) 0 0; background: var(--surface); }
+  .sticky-head table { table-layout: fixed; min-width: 0; }
+
+  /* ── Callout / list — no box, flush-left, baseline-aligned label ─────── */
+  /* One grid for the whole list (subgrid rows), so every description starts at the same
+     place: the label column is as wide as the widest label. */
+  .callout ul { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: max-content 1fr; column-gap: 12px; }
+  .callout li { grid-column: 1 / -1; display: grid; grid-template-columns: subgrid; padding: 16px 0; align-items: baseline; }
+  .callout li > .chip { justify-self: start; }
+  .callout li:first-child { padding-top: 0; }
+  .callout li p { margin: 0; color: var(--text); }
+  /* Narrow screens: the label sits above its text, so long labels never push the page sideways. */
+  @media (max-width: 479px) { .callout ul { grid-template-columns: minmax(0, 1fr); row-gap: 0; } .callout li { row-gap: 8px; } }
+
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
+
+  /* ── OPTIONAL on-this-page nav (delete this block + the <nav> + 
+<script> if unused) ── */
+  .pagenav { position: fixed; right: 8px; top: 168px; z-index: 50; padding: 14px 16px; }   /* right:8 + 16 padding = bars 24px from edge */
+  @media (max-width: 1199px) { .pagenav { display: none; } }
+  .pagenav ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; transition: gap .3s ease; }
+  .pagenav:hover ul { gap: 0; }
+  .pagenav li { display: flex; width: 100%; justify-content: flex-end; }
+  .pagenav a { position: relative; display: flex; align-items: center; justify-content: flex-end; width: 32px; height: 12px; text-decoration: none; outline: none; transition: width .3s ease, height .3s ease; }
+  .pagenav:hover a { width: 280px; height: 40px; }
+  .pagenav__bar { height: 2px; width: 16px; background: var(--line); transition: width .3s ease, background .3s ease, opacity .16s ease .16s; }
+  .pagenav a.is-active .pagenav__bar { width: 32px; background: var(--text); }
+  .pagenav:hover .pagenav__bar { opacity: 0; transition: opacity .16s ease; }
+  .pagenav__label { position: absolute; top: 0; right: 0; height: 100%; width: auto; max-width: 280px; display: block; line-height: 40px; padding: 0 12px; box-sizing: border-box; border-radius: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: right; color: var(--muted); opacity: 0; pointer-events: none; transition: opacity .16s ease, background-color .15s ease, color .15s ease; }
+  .pagenav a.is-active .pagenav__label { color: var(--text); }
+  .pagenav:hover .pagenav__label { opacity: 1; pointer-events: auto; transition: opacity .16s ease .16s, background-color .15s ease, color .15s ease; }
+  .pagenav a:hover .pagenav__label, .pagenav a:focus-visible .pagenav__label { background: var(--surface); }
+  .pagenav a:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 8px; }
+  /* ── OPTIONAL bottom sheet (delete this block and the Sheet script if unused) ──
+     Open one with Sheet.open({ title, eyebrow, media, html | node, tall }). See reference.md §9. */
+  .sheet__overlay { position: fixed; inset: 0; z-index: 100; display: flex; justify-content: center; align-items: flex-end; background-color: rgba(25,25,25,.4); }
+  .sheet { position: relative; display: flex; flex-direction: column; overflow: hidden; box-sizing: border-box; inline-size: min(100%, 48rem); max-block-size: 86dvh; background: var(--white); color: var(--text); outline: none;
+    border-radius: 32px 32px 0 0; clip-path: inset(0 round 32px 32px 0 0); isolation: isolate; }   /* clip-path repeats the rounding: iOS Safari sometimes drops border-radius clipping on a moving, scrolling box */   /* 32px = the close button's 20px radius + its 12px inset: concentric corners */
+  .sheet.sheet:focus-visible { outline: none; }   /* the sheet takes focus when it opens; that must not draw a ring */
+  .sheet--tall { block-size: 86dvh; }             /* fixed height, for sheets whose content changes (tabs) */
+  .sheet__header { position: relative; z-index: 3; background: var(--white); display: flex; align-items: center; gap: 12px; padding: 24px 72px 12px 20px; touch-action: none; }
+  .sheet__media { width: 56px; height: 56px; flex: 0 0 auto; border-radius: 50%; object-fit: cover; background: var(--surface); }
+  .sheet__eyebrow { margin: 0 0 4px; color: var(--muted); }
+  .sheet__title { margin: 0; }
+  .sheet__close { position: absolute; inset-block-start: 12px; inset-inline-end: 12px; z-index: 6; inline-size: 40px; block-size: 40px; padding: 0; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; }
+  /* Pinned rows live in .sheet__pin, outside the scrolling body, for as long as they are pinned,
+     so the elastic bounce at the ends of the scroll moves the content but never them. */
+  .sheet__wrap { position: relative; flex: 1; min-block-size: 0; display: flex; flex-direction: column; }
+  .sheet__pin { position: absolute; inset: -2px 20px auto 20px; padding-top: 2px; z-index: 4; overflow: hidden; background: var(--white); }   /* starts 2px above the scroll area and overlaps the header's empty bottom padding: phones round the two layers' edges separately, which otherwise leaves a hairline of scrolling content showing between them */
+  .sheet__pin > * { margin: 0 !important; }
+  .sheet__body { flex: 1; min-block-size: 0; overflow-y: auto; overscroll-behavior: contain; padding-inline: 20px; scrollbar-width: thin; }   /* contain, not none: keep the bounce */
+  .sheet__content { padding-block: 4px 0; }
+  .sheet__foot { margin-top: 56px; padding-bottom: max(24px, env(safe-area-inset-bottom, 0px)); }   /* Close: 56px under the content, 24px from the bottom */
+  .sheet__foot .btn { width: 100%; min-height: 56px; border-radius: 12px; }
+  .sheet:not([data-dragging]) { transition: translate .25s cubic-bezier(.2, 0, 0, 1); }
+  @media (prefers-reduced-motion: no-preference) {
+    .sheet__overlay[data-entering] { animation: sheet-dim .4s linear; }
+    .sheet__overlay[data-exiting] { animation: sheet-dim .25s linear reverse forwards; }
+    .sheet[data-entering] { animation: sheet-up-in .4s cubic-bezier(.32, .72, 0, 1); }
+    .sheet[data-exiting] { animation: sheet-up-out .25s cubic-bezier(.32, .72, 0, 1) forwards; }
+  }
+  @keyframes sheet-dim { 0% { background-color: transparent; } }
+  @keyframes sheet-up-in { 0% { translate: 0 100%; } }
+  @keyframes sheet-up-out { to { translate: 0 100%; } }
+  /* content inside a sheet: sub-sections get a rule and space; tables lose their box and run margin to margin */
+  .sheet h3 { margin: 40px 0 16px; padding-top: 40px; border-top: 1px solid var(--line); }
+  .sheet .table-scroll { width: auto; max-width: none; border: 0; border-radius: 0; }
+  .sheet table { min-width: 0; }   /* fit the sheet; give a genuinely wide table its own min-width and it scrolls sideways */
+  .sheet thead th { background: none; }
+  .sheet tr > :first-child { padding-left: 0; }
+  .sheet tr > :last-child { padding-right: 0; }
+  .sheet tbody tr:hover td, .sheet tbody tr:hover th { background: none; }
+  .sheet-thead { display: none; }
+  .sheet .sheet-thead { display: block; overflow: hidden; background: var(--white); pointer-events: none; }
+  .sheet .sheet-thead table { table-layout: fixed; min-width: 0; }
+  [data-pin] { background: var(--white); padding-bottom: 8px; border-bottom: 1px solid var(--line); margin-bottom: 8px; }   /* a pinned row carries a rule 8px under it */
+
+  /* ── Report actions: Share and Save as PDF ───────────────────────────── */
+  .visually-hidden { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+  .actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 24px 0 0; }
+  .btn--icon { display: inline-flex; align-items: center; gap: 8px; }
+  .btn svg, .dock svg, .contents svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  .toast { position: fixed; left: 50%; top: 0; z-index: 120; translate: -50% 0; padding: 8px 16px; border-radius: 8px; background: var(--text); color: var(--white); opacity: 0; pointer-events: none; transition: opacity .2s ease; }
+  .toast[data-on] { opacity: 1; }
+
+  /* ── Phones and tablets: the page nav docked at the bottom.
+     A gray field names the current section (the name slides to the next as the
+     page moves); it opens the contents, with Share and Save as PDF, in a sheet. */
+  .dock { display: none; }
+  @media (max-width: 1199px) {
+    .dock { display: block; position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; padding: 12px 20px calc(12px + env(safe-area-inset-bottom, 0px)); background: var(--white); border-top: 1px solid var(--line); }
+    main { padding-bottom: 120px; }
+    .actions { display: none; }
+  }
+  .dock__field { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 16px; border: 0; border-radius: 12px; background: var(--surface); color: var(--text); font: inherit; text-align: left; cursor: pointer;
+    transition: background-color .15s ease, transform .3s cubic-bezier(.34, 1.56, .64, 1); }
+  .dock__field:active { transform: scale(.98); transition-duration: .15s, .1s; transition-timing-function: ease, cubic-bezier(.2, 0, 0, 1); }
+  @media (hover: hover) { .dock__field:hover { background: var(--surface-2); } }
+  .dock__names { position: relative; flex: 1; min-width: 0; height: 1.4em; overflow: hidden; }
+  .dock__name { position: absolute; inset: 0; display: flex; gap: 12px; white-space: nowrap; transition: transform .36s cubic-bezier(.2, 0, 0, 1), opacity .36s ease; }
+  .dock__name span:last-child { overflow: hidden; text-overflow: ellipsis; }
+  .dock__name .dock__num { color: var(--muted); min-width: 1.5em; }
+  .dock__name[data-from="below"] { transform: translateY(100%); opacity: 0; }
+  .dock__name[data-from="above"] { transform: translateY(-100%); opacity: 0; }
+
+  /* The contents, inside the sheet: one row per section, the current one black and checked. */
+  .contents { list-style: none; margin: 0; padding: 0; }
+  .contents a { display: flex; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); color: var(--muted); text-decoration: none; }
+  .contents li:first-child a { border-top: 0; }
+  .contents li:last-child a { border-bottom: 1px solid var(--line); }
+  .contents a[aria-current] { color: var(--text); }
+  .contents a svg { margin-left: auto; visibility: hidden; }
+  .contents a[aria-current] svg { visibility: visible; }
+  .contents__num { min-width: 1.5em; color: var(--muted); }
+  .sheet-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 24px; }
+  .sheet-actions .btn { justify-content: center; min-height: 56px; border-radius: 12px; }
+  /* The sheet's Close sits 8px under Share and Save as PDF, the same as the gap between them. */
+  .sheet:has(.sheet-actions) .sheet__foot { margin-top: 8px; }
+
+  /* ── Tables as cards on phones: under 600px each row becomes a gray card, its
+     name as the title, then each column's label and value. 24px corners, 16px
+     inside, 8px apart. Where every value is short (scores, times), a thin line
+     leads from each label to its value, which sits at the right. ─────────── */
+  .tcards { display: none; list-style: none; margin: 0; padding: 0; }
+  @media (max-width: 599px) {
+    .table-scroll { display: none; }
+    .tcards { display: block; }
+    h3:has(+ .table-scroll) { margin-bottom: 12px; }   /* a heading sits close to its cards */
+  }
+  .tcards > li { padding: 16px; border-radius: 24px; background: var(--surface); }
+  .tcards > li + li { margin-top: 8px; }
+  .tcards__title { margin: 0 0 8px; color: var(--text); }
+  .tcards dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 16px; margin: 0; }
+  .tcards dl > div { display: contents; }
+  .tcards dt { color: var(--muted-on-surface); }
+  .tcards dd { margin: 0; color: var(--text); text-wrap: pretty; }
+  .tcards--leaders dl { display: block; }
+  .tcards--leaders dl > div { display: flex; align-items: center; gap: 12px; }
+  .tcards--leaders dl > div + div { margin-top: 4px; }
+  .tcards--leaders dt { display: flex; flex: 1; align-items: center; gap: 12px; }
+  .tcards--leaders dt::after { content: ""; flex: 1; min-width: 16px; height: 1px; background: var(--line); }
+  .tcards--leaders dd { text-align: right; }
+
+  /* ── Print, and Save as PDF: a US Letter document. The navigation, buttons and
+     switches drop; tables print as tables; rows, list items and headings don't split. ── */
+  @page { size: letter; margin: 0.6in 0.6in 0.75in; @bottom-right { content: counter(page) " of " counter(pages); font: 9pt "Public Sans", sans-serif; color: #767676; } }
+  @media print {
+    html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .pagenav, .dock, .actions, .toast, .sheet__overlay, .tcards { display: none !important; }
+    .table-scroll { display: block !important; overflow: visible; }
+    table { min-width: 0; }
+    .wrap { max-width: none; padding: 0; }
+    .top-strip { padding: 0; }
+    .hero { padding: 32px 0 24px; }
+    main { padding: 0 !important; }
+    section { padding: 24px 0; }
+    h1, h2, h3, .sec-head, .kicker { break-after: avoid; }
+    tr, .callout li, .verdict, .card { break-inside: avoid; }
+    thead { display: table-header-group; }
+    a { color: inherit; }
+  }
+</style>
+
+<header class="masthead">
+  <div class="wrap">
+    <div class="top-strip">
+      <div class="org">
+        <span class="org-name">NYC Health</span>
+        <span class="org-sub">NYC HART Connector landing page</span>
+      </div>
+    </div>
+
+    <div class="hero">
+      <p class="eyebrow">Testing summary</p>
+      <h1>Accessibility and performance testing</h1>
+      <div class="doc-meta">
+        <span>Created November 7, 2026</span>
+        <span>Updated November 9, 2026</span>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn btn--icon" data-share><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v13"/><path d="m16 6-4-4-4 4"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/></svg><span>Share</span></button>
+        <button type="button" class="btn btn--icon" data-print><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M12 18v-6"/><path d="m9 15 3 3 3-3"/></svg><span>Save as PDF</span></button>
+      </div>
+
+      <h2 class="kicker" id="exec">Executive summary</h2>
+      <p class="lead">The landing page scores 100 for performance and 100 for accessibility in Google Lighthouse, on both a simulated mid-range phone and desktop. The first audit, on the prototype, scored 58 for performance. We also tested against WCAG 2.2 AA, the newest accessibility standard, with tools, scripts and real key presses, and found no failures. These tools are diagnostic, and the scores come with no design choices given up.</p>
+
+      <div class="verdict">
+        <p class="verdict-title">Bottom line</p>
+        <p class="verdict-body">The page passes every automated and scripted test we ran. We can't claim WCAG conformance until people test it with screen readers.</p>
+      </div>
+    </div>
+  </div>
+</header>
+
+
+<main class="wrap">
+
+  <section id="section-1" aria-labelledby="h-1">
+    <div class="sec-head"><span class="sec-num" aria-hidden="true">01</span><h2 id="h-1">Results</h2></div>
+    <p class="sec-intro">Lighthouse on a local server. A real host adds compression and caching, but also real network delay.</p>
+    <h3>Phone</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th scope="col">Version</th><th scope="col">Performance</th><th scope="col">Accessibility</th><th scope="col">Largest paint</th><th scope="col">Blocking time</th><th scope="col">Layout shift</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Prototype, first audit</th><td>58</td><td>100</td><td>4.9s</td><td>660ms</td><td>0.03</td></tr>
+          <tr><th scope="row">Production build, English</th><td>100</td><td>100</td><td>1.4s</td><td>0ms</td><td>0.003</td></tr>
+          <tr><th scope="row">Production build, Arabic</th><td>99</td><td>100</td><td>1.6s</td><td>0ms</td><td>0.009</td></tr>
+          <tr><th scope="row">React version</th><td>97</td><td>100</td><td>2.2s</td><td>0ms</td><td>0.003</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <h3>Desktop</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th scope="col">Version</th><th scope="col">Performance</th><th scope="col">Accessibility</th><th scope="col">Largest paint</th><th scope="col">Blocking time</th><th scope="col">Layout shift</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Production build, English</th><td>100</td><td>100</td><td>0.4s</td><td>0ms</td><td>0</td></tr>
+          <tr><th scope="row">Production build, Arabic</th><td>100</td><td>100</td><td>0.5s</td><td>0ms</td><td>0.002</td></tr>
+          <tr><th scope="row">React version</th><td>100</td><td>100</td><td>0.7s</td><td>0ms</td><td>0</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <h3>Best practices and SEO</h3>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th scope="col">Version</th><th scope="col">Best practices</th><th scope="col">SEO</th><th scope="col">Note</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Production build</th><td>100</td><td>92</td><td>Lighthouse can't download robots.txt from inside the page: the page's strict security policy blocks it. Search engines fetch it directly, so they're unaffected</td></tr>
+          <tr><th scope="row">React version</th><td>100</td><td>100</td><td>Up from 96 and 83 after the fixes below</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <h3>What changed and what varies</h3>
+    <div class="callout">
+      <ul>
+        <li><span class="chip">58 to 100</span><p>The production build sends only the code and styles the page uses, minified, with WebP images. Downloads fell from about 730KB to 191KB.</p></li>
+        <li><span class="chip">95 to 100</span><p>The English score moves between runs because the page waits for the temporary Google font. The City's own font file should keep it at 100.</p></li>
+        <li><span class="chip">Phone first</span><p>The phone test is the hard one: a slowed processor and a slow connection. Desktop uses a fast connection and no slowdown, so it scores the same or higher. Tablet is covered in the next section.</p></li>
+        <li><span class="chip">React 97</span><p>Typical of three runs; one slower run scored 94 (2.6s). The gap to 100 has two causes. The temporary Google font blocks the first paint for about 0.8s, which self-hosting the fonts fixes for both builds. And nothing shows until React's code loads, which pre-rendering the page to HTML in the real build fixes.</p></li>
+        <li><span class="chip">Legible text</span><p>The phone demo's words measured about 7px on a phone, so Lighthouse counted half the page's text as too small. The demo is now laid out at full size, with 16px text, and scaled down as one picture. It looks the same, and Best practices went from 96 to 100.</p></li>
+        <li><span class="chip">React SEO</span><p>The React app had no page description, and its server answered robots.txt with a web page. It now has both: the description follows the page's language. SEO went from 83 to 100.</p></li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="section-device" aria-labelledby="h-device">
+    <div class="sec-head"><span class="sec-num" aria-hidden="true">02</span><h2 id="h-device">Phone, tablet and desktop</h2></div>
+    <p class="sec-intro">Lighthouse has phone and desktop modes but no tablet mode. Tablet widths were covered by axe at 800px and the layout checks across its range. Every width passed.</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th scope="col">Device</th><th scope="col">Widths</th><th scope="col">Performance</th><th scope="col">Accessibility</th><th scope="col">Result</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Phone</th><td>320 to 719px</td><td>Lighthouse, phone mode</td><td>Lighthouse, axe, real keys, layout checks</td><td>100 and 100, no failures</td></tr>
+          <tr><th scope="row">Tablet</th><td>720 to 1023px</td><td>Covered by the phone run, the harder test</td><td>axe, layout checks</td><td>No failures</td></tr>
+          <tr><th scope="row">Desktop</th><td>1024px and up</td><td>Lighthouse, desktop mode</td><td>Lighthouse, axe, real keys, layout checks</td><td>100 and 100, no failures</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="section-2" aria-labelledby="h-2">
+    <div class="sec-head"><span class="sec-num" aria-hidden="true">03</span><h2 id="h-2">Standards and targets</h2></div>
+    <p class="sec-intro">The standards are public. The targets are our own choice, set above each standard's pass mark.</p>
+    <div class="callout">
+      <ul>
+        <li><span class="chip">WCAG 2.2 AA</span><p>The accessibility standard US law refers to. The ADA's 2024 rule requires state and local governments to meet WCAG 2.1 AA; version 2.2 includes all of 2.1 and adds more.</p></li>
+        <li><span class="chip">Core Web Vitals</span><p>Google's measure of how fast a page feels, used across the industry: the largest thing on screen drawn within 2.5s, content that doesn't jump, and a page that responds to input within 200ms.</p></li>
+        <li><span class="chip">Performance 95+</span><p>Lighthouse calls 90 good. We aimed higher to leave room for a real host, the video and later additions, and because many New Yorkers use older phones on slower connections.</p></li>
+        <li><span class="chip">Accessibility 100</span><p>No automated failure at all. It is a public service page for everyone, and automated failures are the easiest problems to prevent.</p></li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="section-3" aria-labelledby="h-3">
+    <div class="sec-head"><span class="sec-num" aria-hidden="true">04</span><h2 id="h-3">How the performance score works</h2></div>
+    <p class="sec-intro">Lighthouse imitates a mid-range Android phone: a processor slowed four times, a slow 4G connection (150ms delay, about 1.6 Mbps) and a 412 by 823 screen. Each measurement is graded against millions of real websites, and the score combines them by weight.</p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th scope="col">Measurement</th><th scope="col">What it means</th><th scope="col">Weight</th><th scope="col">Good is under</th><th scope="col">This page</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">Blocking time</th><td>Time the page is frozen by scripts</td><td>30%</td><td>200ms</td><td>0ms</td></tr>
+          <tr><th scope="row">Largest paint</th><td>When the largest thing on screen is drawn</td><td>25%</td><td>2.5s</td><td>1.4s</td></tr>
+          <tr><th scope="row">Layout shift</th><td>How much content jumps while loading</td><td>25%</td><td>0.1</td><td>0.003</td></tr>
+          <tr><th scope="row">First paint</th><td>When the first content is drawn</td><td>10%</td><td>1.8s</td><td>1.4s</td></tr>
+          <tr><th scope="row">Speed index</th><td>How quickly the screen fills in</td><td>10%</td><td>3.4s</td><td>1.4s</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="section-4" aria-labelledby="h-4">
+    <div class="sec-head"><span class="sec-num" aria-hidden="true">05</span><h2 id="h-4">Tools and methods</h2></div>
+    <p class="sec-intro">Lighthouse covers only part of WCAG, so most accessibility testing went beyond it.</p>
+    <div class="callout">
+      <ul>
+        <li><span class="chip">Lighthouse 12</span><p>Google's tester, in mobile mode, for the performance score and a subset of accessibility checks.</p></li>
+        <li><span class="chip">Clean runs</span><p>Every score here comes from a browser with no extensions: the command line or an Incognito window. Extensions add their own scripts and errors to the report; in one run they inflated unused JavaScript from 42 KiB to 1,175 KiB.</p></li>
+        <li><span class="chip">axe-core</span><p>Deque's accessibility tester, which most tools are built on. The full WCAG 2.2 AA rule set, at 320, 375, 800, 1024 and 1280px.</p></li>
+        <li><span class="chip">Keyboard</span><p>Real Tab and Shift+Tab presses through the whole page. Every stop shows a focus ring, the order matches the reading order, nothing traps focus, and the sticky header never hides it.</p></li>
+        <li><span class="chip">Measurement</span><p>Scripts for contrast (lowest text 4.68:1, against 4.5:1 required), no sideways scrolling at 320px or 400% zoom, doubled text spacing and 200% text.</p></li>
+        <li><span class="chip">Text zoom</span><p>Safari's text-only zoom at every step up to 300%, at seven widths from 320 to 1920px.</p></li>
+        <li><span class="chip">npm run check</span><p>Runs on every build, in all 11 languages: layout at eight widths, keyboard pausing the animations, reduced motion, enlarged text and screen reader announcements.</p></li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="section-read" aria-labelledby="h-read">
+    <div class="sec-head"><span class="sec-num" aria-hidden="true">06</span><h2 id="h-read">How we read the scores</h2></div>
+    <p class="sec-intro">Lighthouse, axe and the other tools are diagnostic. They find problems; they don't define a good site. A good site balances technical health with the emotional and visual impact its audience needs.</p>
+    <div class="callout">
+      <ul>
+        <li><span class="chip">Diagnostic</span><p>We use the scores to find and fix problems, not as the goal. We don't chase a number for its own sake.</p></li>
+        <li><span class="chip">Perceived speed</span><p>A page can be objectively faster, and score better, yet feel worse to a person. Motion, pacing and how content appears are designed for how the page feels, not only for how it measures.</p></li>
+        <li><span class="chip">No trade-off</span><p>The high scores come with every design choice intact: the hero animation, the How it works media, the type and the illustrations. Nothing was cut or simplified to raise a score, so the page stays strong, clear, simple and elegant for New Yorkers.</p></li>
+      </ul>
+    </div>
+  </section>
+
+  <section id="section-5" aria-labelledby="h-5">
+    <div class="sec-head"><span class="sec-num" aria-hidden="true">07</span><h2 id="h-5">Limits and what's left</h2></div>
+    <p class="sec-intro">What these numbers don't show, and what needs a person before launch.</p>
+    <div class="callout">
+      <ul>
+        <li><span class="chip">Automated</span><p>A score of 100 means no automated check failed. Automated tools find roughly a third to a half of real accessibility problems.</p></li>
+        <li><span class="chip">Lab data</span><p>One imitated phone on a local server. Real visitors' speed can only be measured after launch.</p></li>
+        <li><span class="chip">Screen readers</span><p>VoiceOver on Mac and iPhone, NVDA on Windows, TalkBack on Android, and JAWS if OTI requires it.</p></li>
+        <li><span class="chip">Still to test</span><p>Text zoom in Firefox, OTI's requirements that may be relevant, and a final run on the real host once the footer and FAQ answers are in.</p></li>
+      </ul>
+    </div>
+  </section>
+</main>
+
+<nav class="pagenav" aria-label="On this page">
+  <ul>
+    <li><a href="#exec" data-target="exec"><span class="pagenav__bar" aria-hidden="true"></span><span class="pagenav__label">Executive summary</span></a></li>
+    <li><a href="#section-1" data-target="section-1"><span class="pagenav__bar" aria-hidden="true"></span><span class="pagenav__label">Results</span></a></li>
+    <li><a href="#section-device" data-target="section-device"><span class="pagenav__bar" aria-hidden="true"></span><span class="pagenav__label">Phone, tablet and desktop</span></a></li>
+    <li><a href="#section-2" data-target="section-2"><span class="pagenav__bar" aria-hidden="true"></span><span class="pagenav__label">Standards and targets</span></a></li>
+    <li><a href="#section-3" data-target="section-3"><span class="pagenav__bar" aria-hidden="true"></span><span class="pagenav__label">How the performance score works</span></a></li>
+    <li><a href="#section-4" data-target="section-4"><span class="pagenav__bar" aria-hidden="true"></span><span class="pagenav__label">Tools and methods</span></a></li>
+    <li><a href="#section-read" data-target="section-read"><span class="pagenav__bar" aria-hidden="true"></span><span class="pagenav__label">How we read the scores</span></a></li>
+    <li><a href="#section-5" data-target="section-5"><span class="pagenav__bar" aria-hidden="true"></span><span class="pagenav__label">Limits and what's left</span></a></li>
+  </ul>
+</nav>
+
+<!-- Phones and tablets, sheet option: the page nav docked at the bottom. -->
+<div class="dock">
+  <button type="button" class="dock__field" aria-haspopup="dialog" data-contents-open>
+    <span class="visually-hidden">Contents. Current section: </span>
+    <span class="dock__names"></span>
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m18 15-6-6-6 6"/></svg>
+  </button>
+</div>
+
+<!-- The sheet's content: the sections, then Share and Save as PDF. -->
+<div id="contentsSheet" hidden>
+  <ul class="contents"></ul>
+  <div class="sheet-actions">
+    <button type="button" class="btn btn--icon" data-share><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v13"/><path d="m16 6-4-4-4 4"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/></svg><span>Share</span></button>
+    <button type="button" class="btn btn--icon" data-print><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M12 18v-6"/><path d="m9 15 3 3 3-3"/></svg><span>Save as PDF</span></button>
+  </div>
+</div>
+
+<p class="toast" role="status" aria-live="polite"></p>
+
+
+<script>
+  /* No orphans in description text. Browsers balance a block only up to about six
+     lines (Chrome), so: balanced where that works, text-wrap: pretty beyond. */
+  (function () {
+    var sel = '.lead, .sec-intro, .card p, .callout li p, .verdict-body';
+    // And the last two words (of table cells too) of each block stay together, so a word is never alone.
+    document.querySelectorAll(sel + ', td').forEach(function (el) {
+      var w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT), n, last = null;
+      while ((n = w.nextNode())) if (n.data.trim()) last = n;
+      if (last) last.data = last.data.replace(/\s+(\S+\s*)$/, '\u00a0$1');
+    });
+    function fit() {
+      document.querySelectorAll(sel).forEach(function (el) {
+        el.style.textWrap = 'balance';
+        var lh = parseFloat(getComputedStyle(el).lineHeight) || 22.4;
+        el.style.textWrap = el.getBoundingClientRect().height / lh > 6 ? 'pretty' : 'balance';
+      });
+    }
+    fit();
+    addEventListener('resize', fit);
+    if (document.fonts) document.fonts.ready.then(fit);
+  })();
+</script>
+
+<script>
+  /* Optional sticky table header — see the CSS note. Runs only for .table-scroll[data-sticky-head]. */
+  (function () {
+    document.querySelectorAll('.table-scroll[data-sticky-head]').forEach(function (scroller) {
+      var table = scroller.querySelector('table'), thead = table && table.tHead;
+      if (!thead) return;
+      var head = document.createElement('div');
+      head.className = 'sticky-head'; head.hidden = true; head.setAttribute('aria-hidden', 'true');
+      head.innerHTML = '<div class="sticky-head__inner"><table><colgroup></colgroup><thead></thead></table></div>';
+      document.body.appendChild(head);
+      var inner = head.firstElementChild, ctable = inner.firstElementChild, cols = ctable.querySelector('colgroup');
+      function position() {
+        var r = scroller.getBoundingClientRect();
+        var show = r.top < 24 && r.bottom > thead.offsetHeight + 72;
+        head.hidden = !show;
+        if (show) { head.style.left = r.left + 'px'; head.style.width = r.width + 'px'; inner.scrollLeft = scroller.scrollLeft; }
+      }
+      function sync() {
+        ctable.tHead.innerHTML = thead.innerHTML;
+        ctable.tHead.querySelectorAll('[id]').forEach(function (e) { e.removeAttribute('id'); });
+        ctable.tHead.querySelectorAll('button, a, [tabindex]').forEach(function (e) { e.tabIndex = -1; });
+        var last = thead.rows[thead.rows.length - 1];
+        cols.innerHTML = Array.prototype.filter.call(last.cells, function (c) { return c.offsetParent !== null; })
+          .map(function (c) { return '<col style="width:' + c.getBoundingClientRect().width + 'px">'; }).join('');
+        ctable.style.width = table.getBoundingClientRect().width + 'px';
+        position();
+      }
+      head.addEventListener('click', function (e) {   // forward clicks (e.g. sort buttons) to the real header
+        var cell = e.target.closest('th'); if (!cell) return;
+        var row = cell.parentElement, ri = Array.prototype.indexOf.call(ctable.tHead.rows, row);
+        var real = thead.rows[ri] && thead.rows[ri].cells[cell.cellIndex];
+        var target = real && (real.querySelector('button, a') || real); if (target) target.click();
+      });
+      scroller.addEventListener('scroll', function () { inner.scrollLeft = scroller.scrollLeft; }, { passive: true });
+      window.addEventListener('scroll', position, { passive: true });
+      window.addEventListener('resize', sync);
+      window.addEventListener('load', sync);
+      new MutationObserver(function () { requestAnimationFrame(sync); }).observe(table, { childList: true, subtree: true, characterData: true, attributes: true });
+      sync();
+    });
+  })();
+
+  (function () {
+    var nav = document.querySelector('.pagenav');
+    if (!nav) return;
+    var links = Array.prototype.slice.call(nav.querySelectorAll('a[data-target]'));
+    var eyebrow = document.querySelector('.eyebrow');
+    var targets = links.map(function (a) { return document.getElementById(a.getAttribute('data-target')); });
+    var PAD_Y = 14;
+    function place() {   // pin top to the eyebrow; nav stays screen-anchored right
+      if (!eyebrow) return;
+      var t = eyebrow.getBoundingClientRect().top + window.pageYOffset;
+      nav.style.top = Math.round(t - PAD_Y) + 'px';
+    }
+    function spy() {     // active = last section whose top crossed ~30% down the viewport
+      var line = window.pageYOffset + window.innerHeight * 0.3, idx = 0;
+      for (var i = 0; i < targets.length; i++) {
+        if (!targets[i]) continue;
+        if (targets[i].getBoundingClientRect().top + window.pageYOffset - 1 <= line) idx = i;
+      }
+      if (window.innerHeight + window.pageYOffset >= document.documentElement.scrollHeight - 2) idx = targets.length - 1;
+      links.forEach(function (a, i) {
+        var on = i === idx;
+        a.classList.toggle('is-active', on);
+        if (on) a.setAttribute('aria-current', 'true'); else a.removeAttribute('aria-current');
+      });
+    }
+    var ticking = false;
+    function onScroll() { if (!ticking) { requestAnimationFrame(function () { spy(); ticking = false; }); ticking = true; } }
+    place(); spy();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    window.addEventListener('resize', function () { place(); spy(); });
+    window.addEventListener('load', function () { place(); spy(); });
+  })();
+</script>
+
+<!-- OPTIONAL bottom sheet (delete with its CSS block if unused). reference.md §9. -->
+<script>
+  // Was the last input a tap/click (true) or the Tab key (false)? Focus only returns to the opener for
+  // keyboard users, so a tap never leaves a focus ring behind.
+  var pointerMode = true;
+  window.addEventListener('pointerdown', function () { pointerMode = true; }, true);
+  window.addEventListener('keydown', function (e) { if (e.key === 'Tab') pointerMode = false; }, true);
+
+  // Rows that stay at the top of a sheet while their content scrolls by: anything marked data-pin, and
+  // the header row of every table. While pinned, a row sits in `slot`, OUTSIDE the scrolling body, so the
+  // elastic bounce can't move it. (position: sticky would bounce with the content.) A table header is a
+  // copy and is pushed out by the end of its table. Returns a function that puts everything back.
+  function pinRows(body, slot, content) {
+    var pins = [], cur = null;
+    content.querySelectorAll('[data-pin]').forEach(function (el) { if (el.offsetParent !== null) pins.push({ el: el, box: el.parentNode, ph: null }); });
+    content.querySelectorAll('.table-scroll').forEach(function (ts) {
+      var table = ts.querySelector('table'); if (!table || !table.tHead || ts.offsetParent === null) return;
+      var h = document.createElement('div'); h.className = ts.className + ' sheet-thead'; h.setAttribute('aria-hidden', 'true');
+      var cols = [].map.call(table.tHead.rows[0].cells, function (c) { return '<col style="width:' + c.getBoundingClientRect().width + 'px">'; }).join('');
+      h.innerHTML = '<table style="width:' + table.getBoundingClientRect().width + 'px"><colgroup>' + cols + '</colgroup><thead>' + table.tHead.innerHTML + '</thead></table>';
+      var p = { ts: ts, clone: h, hh: table.tHead.getBoundingClientRect().height }; pins.push(p);
+      ts.addEventListener('scroll', upd, { passive: true }); p.off = function () { ts.removeEventListener('scroll', upd); };
+    });
+    function release() {
+      if (!cur) return;
+      if (cur.el) { cur.ph.before(cur.el); cur.ph.remove(); cur.ph = null; } else cur.clone.remove();
+      cur = null;
+    }
+    function upd() {
+      var top = body.getBoundingClientRect().top, next = null, shift = 0;
+      pins.forEach(function (p) {
+        if (p.el) { if ((p.ph || p.el).getBoundingClientRect().top - top <= 0 && p.box.getBoundingClientRect().bottom - top > 0) next = p; }
+        else { var r = p.ts.getBoundingClientRect(); if (r.top - top < 0 && r.bottom - top > 0) { next = p; shift = Math.min(0, r.bottom - top - p.hh); } }
+      });
+      if (next !== cur) {
+        release(); cur = next;
+        if (cur && cur.el) { var ph = document.createElement('div'); ph.style.height = cur.el.offsetHeight + 'px'; ph.style.marginBottom = getComputedStyle(cur.el).marginBottom; cur.ph = ph; cur.el.before(ph); slot.appendChild(cur.el); }
+        else if (cur) slot.appendChild(cur.clone);
+      }
+      if (cur && cur.clone) { cur.clone.style.transform = shift ? 'translateY(' + shift + 'px)' : ''; cur.clone.scrollLeft = cur.ts.scrollLeft; }
+    }
+    body.addEventListener('scroll', upd, { passive: true }); upd();
+    return function () { release(); pins.forEach(function (p) { if (p.off) p.off(); }); };
+  }
+
+  var Sheet = (function () {
+    var cur = null, skipPop = 0;   // skipPop: Back-button events we caused ourselves by closing a sheet
+    function reduce() { return window.matchMedia('(prefers-reduced-motion: reduce)').matches; }
+    // node: an element already on the page, borrowed for the sheet and returned on close. html: a string.
+    function open(o) {
+      if (cur) close(true);
+      var overlay = document.createElement('div'); overlay.className = 'sheet__overlay';
+      overlay.innerHTML = '<div class="sheet' + (o.tall ? ' sheet--tall' : '') + '" role="dialog" aria-modal="true" aria-labelledby="sheetTitle" tabindex="-1">' +
+        '<div class="sheet__header">' + (o.media || '') + '<div>' + (o.eyebrow ? '<p class="sheet__eyebrow">' + o.eyebrow + '</p>' : '') + '<h2 class="sheet__title" id="sheetTitle">' + (o.title || '') + '</h2></div></div>' +
+        '<button type="button" class="btn sheet__close" aria-label="Close" data-close><svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"></path><path d="m6 6 12 12"></path></svg></button>' +
+        '<div class="sheet__wrap"><div class="sheet__pin"></div><div class="sheet__body"><div class="sheet__content"></div>' +
+        '<div class="sheet__foot"><button type="button" class="btn" data-close>Close</button></div></div></div></div>';
+      var sheet = overlay.firstElementChild, content = overlay.querySelector('.sheet__content'), home = null;
+      if (o.node) { home = document.createComment('sheet-home'); o.node.parentNode.insertBefore(home, o.node); content.appendChild(o.node); }
+      else content.innerHTML = o.html || '';
+      document.body.appendChild(overlay);
+      var unpin = pinRows(overlay.querySelector('.sheet__body'), overlay.querySelector('.sheet__pin'), content);
+      var prevFocus = document.activeElement, prevOverflow = document.documentElement.style.overflow;
+      document.documentElement.style.overflow = 'hidden';
+      overlay.setAttribute('data-entering', ''); sheet.setAttribute('data-entering', '');
+      setTimeout(function () { overlay.removeAttribute('data-entering'); sheet.removeAttribute('data-entering'); }, reduce() ? 0 : 420);
+      cur = { overlay: overlay, sheet: sheet, content: content, node: o.node, home: home, onClose: o.onClose, prevFocus: prevFocus, prevOverflow: prevOverflow, unpin: unpin, pushed: false };
+      try { history.pushState({ sheet: 1 }, ''); cur.pushed = true; } catch (e) {}   // the Back button closes the sheet
+      overlay.addEventListener('click', function (e) { if (e.target === overlay || e.target.closest('[data-close]')) close(); });
+      overlay.addEventListener('keydown', function (e) {
+        if (e.key === 'Escape') { e.preventDefault(); close(); return; }
+        if (e.key !== 'Tab') return;   // keep Tab inside the sheet
+        var f = [].filter.call(sheet.querySelectorAll('button,[href],input,select,summary,[tabindex]:not([tabindex="-1"])'), function (x) { return x.offsetParent !== null; });
+        if (!f.length) return;
+        if (e.shiftKey && document.activeElement === f[0]) { e.preventDefault(); f[f.length - 1].focus(); }
+        else if (!e.shiftKey && document.activeElement === f[f.length - 1]) { e.preventDefault(); f[0].focus(); }
+      });
+      // touch: drag the header down to dismiss
+      var head = overlay.querySelector('.sheet__header'), y0 = null, dy = 0;
+      head.addEventListener('pointerdown', function (e) { if (e.pointerType === 'mouse') return; y0 = e.clientY; dy = 0; sheet.setAttribute('data-dragging', ''); head.setPointerCapture(e.pointerId); });
+      head.addEventListener('pointermove', function (e) { if (y0 == null) return; dy = Math.max(0, e.clientY - y0); sheet.style.translate = '0 ' + dy + 'px'; });
+      function end() { if (y0 == null) return; y0 = null; sheet.removeAttribute('data-dragging'); if (dy > 90) close(); else sheet.style.translate = ''; }
+      head.addEventListener('pointerup', end); head.addEventListener('pointercancel', end);
+      sheet.focus({ preventScroll: true });
+      return cur;
+    }
+    function close(instant) {
+      if (!cur) return; var c = cur; cur = null;
+      function finish() {
+        c.unpin();   // pinned rows go back into the content before it returns to the page
+        if (c.node && c.home && c.home.parentNode) { c.home.parentNode.insertBefore(c.node, c.home); c.home.remove(); }
+        c.overlay.remove(); document.documentElement.style.overflow = c.prevOverflow;
+        if (c.onClose) c.onClose();
+        if (!pointerMode && c.prevFocus && c.prevFocus.focus) try { c.prevFocus.focus({ preventScroll: true }); } catch (e) {}
+      }
+      if (c.pushed) { c.pushed = false; try { if (history.state && history.state.sheet) { skipPop++; history.back(); } } catch (e) {} }
+      if (instant || reduce()) { finish(); return; }
+      c.overlay.setAttribute('data-exiting', ''); c.sheet.setAttribute('data-exiting', '');
+      setTimeout(finish, 250);
+    }
+    window.addEventListener('popstate', function () { if (skipPop > 0) { skipPop--; return; } if (cur) { cur.pushed = false; close(); } });
+    return { open: open, close: close, get current() { return cur; } };
+  })();
+</script>
+
+<script>
+  /* Contents (docked bar and sheet), Share, Save as PDF, and table cards. */
+  (function () {
+    var root = document.documentElement;
+    var reduce = function () { return matchMedia('(prefers-reduced-motion: reduce)').matches; };
+
+    // The sections, from the side nav's links.
+    var sections = [].map.call(document.querySelectorAll('.pagenav a[data-target]'), function (a) {
+      var el = document.getElementById(a.dataset.target), num = el && el.querySelector('.sec-num');
+      return { id: a.dataset.target, el: el, label: a.textContent.trim(), num: num ? num.textContent.trim() : '00' };
+    }).filter(function (s) { return s.el; });
+    var row = function (s) {
+      return '<li><a href="#' + s.id + '" data-target="' + s.id + '"><span class="contents__num">' + s.num + '</span><span>' + s.label + '</span>' +
+        '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 6 9 17l-5-5"/></svg></a></li>';
+    };
+    var list = document.querySelector('#contentsSheet .contents');
+    list.innerHTML = sections.map(row).join('');
+
+    // The docked field: the current section's name, sliding to the next as the page moves.
+    var names = document.querySelector('.dock__names'), shown = -1;
+    function nameEl(s) { var n = document.createElement('span'); n.className = 'dock__name'; n.innerHTML = '<span class="dock__num">' + s.num + '</span><span>' + s.label + '</span>'; return n; }
+    function show(i) {
+      if (i === shown) return;
+      // Quick scrolling (a jump through several sections) can change it again mid-slide:
+      // anything still leaving goes at once, so only the last name and the new one are ever there.
+      while (names.children.length > 1) names.firstElementChild.remove();
+      var down = i > shown, old = names.firstElementChild, next = nameEl(sections[i]);
+      if (old) old.removeAttribute('data-from');
+      if (old && !reduce()) {
+        next.setAttribute('data-from', down ? 'below' : 'above');
+        names.appendChild(next);
+        next.getBoundingClientRect();   // start the slide from where it is now
+        next.removeAttribute('data-from');
+        old.setAttribute('data-from', down ? 'above' : 'below');
+        setTimeout(function () { if (old.parentNode && old !== names.lastElementChild) old.remove(); }, 380);
+      } else { names.innerHTML = ''; names.appendChild(next); }
+      shown = i;
+      list.querySelectorAll('a').forEach(function (a, j) { if (j === i) a.setAttribute('aria-current', 'true'); else a.removeAttribute('aria-current'); });
+    }
+    function current() {
+      var line = window.pageYOffset + window.innerHeight * 0.3, idx = 0;
+      sections.forEach(function (s, i) { if (s.el.getBoundingClientRect().top + window.pageYOffset - 1 <= line) idx = i; });
+      if (window.innerHeight + window.pageYOffset >= document.documentElement.scrollHeight - 2) idx = sections.length - 1;
+      return idx;
+    }
+    var ticking = false;
+    function spy(now) { if (now === true) { show(current()); return; } if (!ticking) { ticking = true; requestAnimationFrame(function () { ticking = false; show(current()); }); } }
+    addEventListener('scroll', spy, { passive: true });
+    addEventListener('resize', spy);
+    show(current());
+
+    // Opening the contents in the sheet; a section closes it and goes there.
+    var sheetNode = document.getElementById('contentsSheet');
+    document.querySelector('[data-contents-open]').addEventListener('click', function () {
+      sheetNode.hidden = false;
+      Sheet.open({ title: 'Contents', node: sheetNode, onClose: function () { sheetNode.hidden = true; } });
+    });
+    list.addEventListener('click', function (e) {
+      var a = e.target.closest('a[data-target]'); if (!a) return;
+      e.preventDefault();
+      var s = document.getElementById(a.dataset.target);
+      history.scrollRestoration = 'manual';
+      Sheet.close();
+      setTimeout(function () {
+        s.scrollIntoView({ behavior: reduce() ? 'auto' : 'smooth', block: 'start' });
+        var h = s.matches('h1, h2, h3') ? s : s.querySelector('h2'); if (h) { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); }
+        history.scrollRestoration = 'auto';
+      }, 300);
+    });
+
+    // Share: the phone's own share sheet, or the link copied on desktop.
+    var toast = document.querySelector('.toast'), toastTimer = 0;
+    // A short note centered over the button that was pressed, 4px above it.
+    function say(msg, from) {
+      toast.textContent = msg;
+      var r = from.getBoundingClientRect();
+      toast.style.left = (r.left + r.width / 2) + 'px';
+      toast.style.top = (r.top - 4 - toast.offsetHeight) + 'px';
+      toast.setAttribute('data-on', '');
+      clearTimeout(toastTimer); toastTimer = setTimeout(function () { toast.removeAttribute('data-on'); }, 2000);
+    }
+    document.querySelectorAll('[data-share]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var data = { title: document.title, url: location.href };
+        var copy = function () {
+          if (!navigator.clipboard) { say('Copy the link from the address bar', b); return; }
+          navigator.clipboard.writeText(location.href).then(function () { say('Link copied', b); }, function () { say('Copy the link from the address bar', b); });
+        };
+        if (navigator.share && (!navigator.canShare || navigator.canShare(data))) {
+          navigator.share(data).catch(function (e) { if (e && e.name !== 'AbortError') copy(); });   // closing the share sheet is fine; a refusal copies instead
+        } else copy();
+      });
+    });
+    // Save as PDF: the browser's own print to PDF, with the print rules above.
+    document.querySelectorAll('[data-print]').forEach(function (b) {
+      b.addEventListener('click', function () {
+        if (Sheet.current) Sheet.close(true);
+        setTimeout(function () {
+          try { window.print(); } catch (e) { say('Use your browser\u2019s Print, then Save as PDF', b); }
+        }, 50);
+      });
+    });
+
+    // Table cards for phones: built from each table, shown instead of it when chosen.
+    document.querySelectorAll('.table-scroll').forEach(function (wrap) {
+      var table = wrap.querySelector('table'); if (!table || !table.tHead) return;
+      var heads = [].map.call(table.tHead.rows[0].cells, function (c) { return c.textContent.trim(); });
+      var ul = document.createElement('ul'); ul.className = 'tcards';
+      // Short values only (scores, times): a line leads from each label to its value.
+      var short = [].every.call(table.tBodies[0].querySelectorAll('td'), function (c) { return c.textContent.trim().length <= 12; });
+      if (short) ul.classList.add('tcards--leaders');
+      [].forEach.call(table.tBodies[0].rows, function (tr) {
+        var cells = [].slice.call(tr.cells), li = document.createElement('li');
+        li.innerHTML = '<p class="tcards__title">' + cells[0].innerHTML + '</p><dl>' +
+          cells.slice(1).map(function (c, i) { return '<div><dt>' + heads[i + 1] + '</dt><dd>' + c.innerHTML + '</dd></div>'; }).join('') + '</dl>';
+        ul.appendChild(li);
+      });
+      wrap.after(ul);
+    });
+  })();
+</script>
