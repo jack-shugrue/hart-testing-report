@@ -367,7 +367,7 @@
       <h1>Accessibility and performance testing</h1>
       <div class="doc-meta">
         <span>Created November 7, 2026</span>
-        <span>Updated November 9, 2026</span>
+        <span>Updated November 10, 2026</span>
       </div>
       <div class="actions">
         <button type="button" class="btn btn--icon" data-share><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2v13"/><path d="m16 6-4-4-4 4"/><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/></svg><span>Share</span></button>
@@ -375,7 +375,7 @@
       </div>
 
       <h2 class="kicker" id="exec">Executive summary</h2>
-      <p class="lead">The landing page scores 100 for performance and 100 for accessibility in Google Lighthouse, on both a simulated mid-range phone and desktop. The first audit, on the prototype, scored 58 for performance. We also tested against WCAG 2.2 AA, the newest accessibility standard, with tools, scripts and real key presses, and found no failures. These tools are diagnostic, and the scores come with no design choices given up.</p>
+      <p class="lead">The landing page scores 100 for performance and 100 for accessibility in Google Lighthouse, on both a simulated mid-range phone and desktop. An early audit of the prototype scored 58 for performance: it ran while we were still shaping the design language, long before building for compliance, so it isn't a fair comparison, but it shows accessibility and performance were in view from the start. We also tested against WCAG 2.2 AA, the newest accessibility standard, with tools, scripts and real key presses, and found no failures. These tools are diagnostic, and the scores come with no design choices given up.</p>
 
       <div class="verdict">
         <p class="verdict-title">Bottom line</p>
@@ -396,7 +396,7 @@
       <table>
         <thead><tr><th scope="col">Version</th><th scope="col">Performance</th><th scope="col">Accessibility</th><th scope="col">Largest paint</th><th scope="col">Blocking time</th><th scope="col">Layout shift</th></tr></thead>
         <tbody>
-          <tr><th scope="row">Prototype, first audit</th><td>58</td><td>100</td><td>4.9s</td><td>660ms</td><td>0.03</td></tr>
+          <tr><th scope="row">Early prototype, design stage</th><td>58</td><td>100</td><td>4.9s</td><td>660ms</td><td>0.03</td></tr>
           <tr><th scope="row">Production build, English</th><td>100</td><td>100</td><td>1.4s</td><td>0ms</td><td>0.003</td></tr>
           <tr><th scope="row">Production build, Arabic</th><td>99</td><td>100</td><td>1.6s</td><td>0ms</td><td>0.009</td></tr>
           <tr><th scope="row">React version</th><td>97</td><td>100</td><td>2.2s</td><td>0ms</td><td>0.003</td></tr>
@@ -427,7 +427,7 @@
     <h3>What changed and what varies</h3>
     <div class="callout">
       <ul>
-        <li><span class="chip">58 to 100</span><p>The production build sends only the code and styles the page uses, minified, with WebP images. Downloads fell from about 730KB to 191KB.</p></li>
+        <li><span class="chip">Early audit</span><p>The 58 came from an audit made early in design, while we were still shaping the design language, not building for compliance, so it isn't a fair comparison. It does show we were testing accessibility and performance from the start. Since then, the production build sends only the code and styles the page uses, minified, with WebP images: downloads fell from about 730KB to 191KB.</p></li>
         <li><span class="chip">95 to 100</span><p>The English score moves between runs because the page waits for the temporary Google font. The City's own font file should keep it at 100.</p></li>
         <li><span class="chip">Phone first</span><p>The phone test is the hard one: a slowed processor and a slow connection. Desktop uses a fast connection and no slowdown, so it scores the same or higher. Tablet is covered in the next section.</p></li>
         <li><span class="chip">React 97</span><p>Typical of three runs; one slower run scored 94 (2.6s). The gap to 100 has two causes. The temporary Google font blocks the first paint for about 0.8s, which self-hosting the fonts fixes for both builds. And nothing shows until React's code loads, which pre-rendering the page to HTML in the real build fixes.</p></li>
