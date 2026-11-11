@@ -263,7 +263,9 @@
   .dock { display: none; }
   @media (max-width: 1199px) {
     .dock { display: block; position: fixed; left: 0; right: 0; bottom: 0; z-index: 60; padding: 12px 20px calc(12px + env(safe-area-inset-bottom, 0px)); background: var(--white); border-top: 1px solid var(--line); }
-    main { padding-bottom: 120px; }
+    /* Room under the last line for the docked bar (about 72px), plus 24px and the iPhone's home
+       indicator. On body: main's own bottom padding is reset by .wrap. */
+    body { padding-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
     .actions { display: none; }
   }
   .dock__field { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 16px; border: 0; border-radius: 12px; background: var(--surface); color: var(--text); font: inherit; text-align: left; cursor: pointer;
@@ -345,6 +347,7 @@
     .top-strip { padding: 0; }
     .hero { padding: 32px 0 24px; }
     main { padding: 0 !important; }
+    body { padding-bottom: 0 !important; }
     section { padding: 24px 0; }
     h1, h2, h3, .sec-head, .kicker { break-after: avoid; }
     tr, .callout li, .verdict, .card { break-inside: avoid; }
